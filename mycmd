@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# ================================================================
+# Aim:  This script displays the contents of README.txt.
+#       - If run with "--version", it prints only the first 3 lines.
+#       - If run without arguments, it prints the whole file.
+# ================================================================
+
+# The existance of README.txt file is already checked in .my_custom_bashrc
+FILE="$MYCMD/README.txt"
+
+# If "--version" argument is passed
+if [[ "$1" == "--version" ]]; then
+    # Print first 3 lines
+    head -n 3 "$FILE"
+elif [[ "$1" == "--help" ]]; then
+    # Print the whole file
+    cat "$FILE"
+else
+    echo -e "\033[1;35mAvailable Commands in this package are:\033[0m"
+    # The "\" in the bash is line continuation character, allowing a command to span multiple lines.
+    find "$MYCMD" -maxdepth 1 -type f \
+    ! -name '.my_custom_bashrc' \
+    ! -name 'setup.py' \
+    ! -name 'build.py' \
+    ! -name 'README.txt' \
+    -printf "%f\n"
+    echo "For more information, run: mycmd --help"
+fi

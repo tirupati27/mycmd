@@ -1,0 +1,124 @@
+#!/bin/bash
+
+# ================================================================
+# Aim          : To check if the MYCMD environment variable is set.
+#                If not set, print an error message and exit the script.
+#                And also checks for this package core files (README.txt, mycmd, setup.py),
+#                and other dependencies (python3).
+# ================================================================
+
+# Step 1: Check if 'MYCMD' variable is not just set in the environment but also available for the child processes
+if ! printenv MYCMD >/dev/null 2>&1; then   # 'printenv' command prints the exported variables only
+    echo "❌ Error: 'MYCMD' variable not set in the '~/.bashrc' file."
+    echo "Please read the instructions in the README.txt file of the mycmd package."
+    exit 1  # Exit is most important because subsequent scripts depend on this variable
+fi
+
+# Step 2: Check if README.txt file exists in the package directory
+# checking README.txt file is important because it contains usage instructions and version info
+if [[ ! -f "$MYCMD/README.txt" ]]; then
+    echo "❌ Error: 'README.txt' file not found in the package."
+fi
+
+# Step 3: Check if mycmd file exists in the package directory
+# checking mycmd file is important because it is the integral part of the package
+if [[ ! -f "$MYCMD/mycmd" ]]; then
+    echo "❌ Error: 'mycmd' file not found in the package."
+fi
+
+# Step 4: Check if setup.py file exists in the package directory
+# It is one of the core files of this package
+if [[ ! -f "$MYCMD/setup.py" ]]; then
+    echo "❌ Error: 'setup.py' file not found in the package."
+fi
+
+# step 5: check if python is installed
+# some commands of this package depend on python
+if ! command -v python &> /dev/null; then
+    echo "❌ python is not installed. Some command of 'mycmd' package will not work properly."
+fi
+
+# ================================================================
+# Aim          : Automatically assign frequently used directories
+#                to variables (d1, d2, d3, ...) for easy 'cd' access.
+#                Variables are read-only, safely handle spaces, 
+#                and are exported so child processes can access them.
+#                Also defines a function 'p' to print all shortcuts.
+# ================================================================
+
+# Step 1: Define the directory database
+dir_db=(
+    "/mnt/c/Users/Tirupati Bala"
+    "/mnt/c/Users/Tirupati Bala/desktop"
+    "/mnt/c/Users/Tirupati Bala/data"
+    "/mnt/c/Users/Tirupati Bala/data/acode"
+    "/mnt/c/Users/Tirupati Bala/downloads"
+    "/root"
+)
+# Step 2: Loop through directories and create read-only, exported variables (for child processes)
+for i in "${!dir_db[@]}"; do
+    var_name="d$((i+1))"                     # Create variable names: d1, d2, ...
+    declare -r "$var_name=${dir_db[i]}"     # -r = read-only, means cannot be modified
+    export "$var_name"                        # Export so child processes can access
+done
+
+# Step 3: Define a function to print all directory shortcuts. The function will act as a command.
+p() {
+    count=1
+    for dir in "${dir_db[@]}"; do
+        # Color code: light yellow for the shortcut name
+        echo -e "\033[38;2;200;200;100m\"\$d${count}\"\033[0m == '$dir'"
+        ((count++))
+    done
+}
+export -f p  # Export the function so it can be used in child processes
+
+# ================================================================
+# Aim          : The below script checks all files in this ($MYCMD) directory
+#                and ensures they have executable
+#                permission. If a file is missing execute permission,
+#                the script grants it.
+# ================================================================
+
+# Step 1: Loop through each file in the directory
+for file in "$MYCMD"/*; do
+  # Check if it is a regular file (not directory, symlink, etc.)
+  if [ -f "$file" ]; then
+    
+    # Step 2: Check if the file is NOT executable
+    if [ ! -x "$file" ]; then
+      chmod +x "$file"   # Grant execute permission
+    fi
+  fi
+done
+
+# ================================================================
+# Aim          : Customize the important environment variables
+#                like LS_COLORS and PS1 for better visual experience.
+# ================================================================
+
+# Customize the LS_COLORS variable to change the appearance of 'ls' listings
+export LS_COLORS='di=01;34:tw=01;34:ow=01;34:ln=01;96'
+
+# Customize the PS1 variable to change the Bash prompt appearance
+if [ "$EUID" -eq 0 ]; then  # Check if the user is root
+    export PS1='\[\033[1;32m\]Tirupati:\[\033[0m\] \[\033[1;34m\]\w\[\033[0m\] \[\033[1;32m\]\$\[\033[0m\] '
+    echo -e "\033[1;31mYou are logged in as root user. Be cautious while executing commands.\033[0m"
+
+else    # Non-root user
+    export PS1='\[\033[1;93m\]Tirupati:\[\033[0m\] \[\033[38;2;220;100;100m\]\w\[\033[0m\] \[\033[1;93m\]#\[\033[0m\] '
+fi
+
+export PATH="$MYCMD:$PATH"  # add my custom command directory to PATH
+
+# ================================================================
+# Aim          : Aliasing some frequently used commands to shorter versions.
+# ================================================================
+
+alias ll='ls -lha --color=auto'          # Long listing with hidden files and human-readable sizes
+alias activate='source "/mnt/c/Users/Tirupati Bala/myenv/bin/activate"'  # Activate Python virtual environment
+alias update='sudo apt update && sudo apt upgrade -y'  # Update and upgrade system
+
+# ================================================================
+# Aim          : Other user specific customizations.
+# ================================================================

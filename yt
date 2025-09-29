@@ -1,0 +1,160 @@
+#!/bin/bash
+# List of preferred directories to save downloads
+# Modify this list to include directories that exist on your system
+dir_preference=(
+    "/storage/emulated/0"
+    "/mnt/c/Users/Tirupati Bala/desktop"
+)
+# ================================================================
+# Aim          : A simple script to download Videos or Audio from YouTube using yt-dlp.
+#                The script prompts the user for a Video URL and desired format,
+#                then uses yt-dlp to download the content accordingly.
+# ================================================================
+
+# Exit the script if yt-dlp is not installed
+if ! command -v yt-dlp &> /dev/null; then
+    echo "❌ yt-dlp is not installed. Please install it first."
+    exit 1
+fi
+# Exit the script if no URL is provided as an argument
+if [ -z "$1" ]; then
+    echo "❌ Error: No URL provided."
+    echo "Usage: yt <Video-URL>"
+    exit 1
+fi
+
+# ===============================================================
+# Find the first existing directory from the preferred list to save downloads there
+FIRST_EXISTING_DIR=""
+for dir in "${dir_preference[@]}"; do
+    if [ -d "$dir" ]; then      # Check if directory exists
+        FIRST_EXISTING_DIR="$dir"
+        break                   # Exit loop after finding the first existing directory
+    fi
+done
+# Exit the script if no directory exists
+if [ -z "$FIRST_EXISTING_DIR" ]; then
+    echo "❌ None of the directories exist to save downloads."
+    echo -e "Please modify the script \033[32m$MYCMD/yt\033[0m to include an existing directory."
+    exit 1
+fi
+cd "$FIRST_EXISTING_DIR"
+# ===============================================================
+# Defining a function for colored text output
+color() {
+    if [[ "$1" == "red" ]]; then
+        echo -e "\033[31m$2\033[0m"  # Red color
+    elif [[ "$1" == "green" ]]; then
+        echo -e "\033[32m$2\033[0m"  # Green color
+    elif [[ "$1" == "yellow" ]]; then
+        echo -e "\033[33m$2\033[0m"  # Yellow color
+    elif [[ "$1" == "blue" ]]; then
+        echo -e "\033[34m$2\033[0m"  # Blue color
+    elif [[ "$1" == "magenta" ]]; then
+        echo -e "\033[1;35m$2\033[0m"  # Magenta color
+    elif [[ "$1" == "cyan" ]]; then
+        echo -e "\033[36m$2\033[0m"  # Cyan color
+    else
+        echo "$2"                    # No color
+    fi
+}
+# Defining a function to handle exit on 'exit' input
+handle_exit() {
+    if [[ "$1" == "exit" ]]; then
+        echo "$(color cyan "Exiting the script.")"
+        exit 0
+    fi
+}
+# ===============================================================
+
+# Showing the Video information to the user to help them choose the format
+url="$1"
+clear
+echo "$(color yellow "fetching video information...")"
+yt-dlp -F "$url"
+
+# Prompt user for download option
+echo -e "\n$(color magenta Note:) Type 'exit' in any prompt to quit the script."
+echo "Choose The Download Option:"
+echo "1. Video"
+echo "2. Audio"
+echo "3. Video Clips"
+echo "4. Audio Clips"
+read -p "$(color magenta "Enter your choice (1-4):") " choice
+handle_exit "$choice"
+
+fileName_pattern="%(title)s_%(id)s_%(resolution)s"     # Pattern for naming of downloaded files
+
+# ===============================================================
+if [[ "$choice" == "1" ]]; then # Download Video
+    read -p "$(color magenta "Enter the format code for Video (e.g. 18 or 137+140 or bv+ba):") " format_code
+    handle_exit "$format_code"
+    # The '\' is line continuation character in bash, allowing a command to span multiple lines for better readability.
+    yt-dlp \
+    -f "$format_code" \
+    -o "$fileName_pattern" \
+    --merge-output-format mp4 \
+    --embed-thumbnail \
+    --no-playlist \
+    --retries infinite \
+    --fragment-retries 10 \
+    "$url"
+# ===============================================================
+
+elif [[ "$choice" == "2" ]]; then   # Download Audio
+    read -p "$(color magenta "Enter the format code for Audio (e.g. 140 or ba):") " format_code
+    handle_exit "$format_code"
+    # yt-dlp command to download Audio
+    yt-dlp \
+    -f "$format_code" \
+    -o "$fileName_pattern" \
+    --extract-audio \
+    --embed-thumbnail \
+    --no-playlist \
+    --retries infinite \
+    --fragment-retries 10 \
+    "$url"
+# ===============================================================
+
+elif [[ "$choice" == "3" ]]; then   # Download Video Clips
+    read -p "$(color magenta "Enter the clip timing range (e.g., 00:01:30-00:02:45):") " time_range
+    handle_exit "$time_range"
+    read -p "$(color magenta "Enter the format code for Video (e.g. 18 or 137+140 or bv+ba):") " format_code
+    handle_exit "$format_code"
+    # yt-dlp command to download Video clips
+    yt-dlp \
+    -f "$format_code" \
+    -o "$fileName_pattern" \
+    --merge-output-format mp4 \
+    --download-sections "*$time_range" \
+    --force-keyframes-at-cuts \
+    --embed-thumbnail \
+    --no-playlist \
+    --retries infinite \
+    --fragment-retries 10 \
+    "$url"
+# ===============================================================
+
+elif [[ "$choice" == "4" ]]; then   # Download Audio Clips
+    read -p "$(color magenta "Enter the clip timing range (e.g., 00:01:30-00:02:45):") " time_range
+    handle_exit "$time_range"
+    read -p "$(color magenta "Enter the format code for Audio (e.g. 140 or ba):") " format_code
+    handle_exit "$format_code"
+    # yt-dlp command to download Audio clips
+    yt-dlp \
+    -f "$format_code" \
+    -o "$fileName_pattern.mp3" \
+    --extract-audio \
+    --download-sections "*$time_range" \
+    --force-keyframes-at-cuts \
+    --embed-thumbnail \
+    --no-playlist \
+    --retries infinite \
+    --fragment-retries 10 \
+    "$url"
+# ===============================================================
+    
+else
+    echo "❌ Invalid choice. Exiting."
+    exit 1
+fi
