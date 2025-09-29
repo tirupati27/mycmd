@@ -3,7 +3,7 @@
 # Modify this list to include directories that exist on your system
 dir_preference=(
     "/storage/emulated/0"
-    "/mnt/c/Users/Tirupati Bala/desktop"
+    "/mnt/c/Users/Tirupati Bala/Desktop"
 )
 # ================================================================
 # Aim          : A simple script to download Videos or Audio from YouTube using yt-dlp.
@@ -14,12 +14,6 @@ dir_preference=(
 # Exit the script if yt-dlp is not installed
 if ! command -v yt-dlp &> /dev/null; then
     echo "❌ yt-dlp is not installed. Please install it first."
-    exit 1
-fi
-# Exit the script if no URL is provided as an argument
-if [ -z "$1" ]; then
-    echo "❌ Error: No URL provided."
-    echo "Usage: yt <Video-URL>"
     exit 1
 fi
 
@@ -65,28 +59,64 @@ handle_exit() {
         exit 0
     fi
 }
+
 # ===============================================================
+# Parsing the CLI arguments to choose the download type
+# Function to show usage
+usage() {
+    echo "Usage: yt <flag> <url>"
+    echo "Flags:"
+    echo "  -v,  --video         : Download video"
+    echo "  -a,  --audio         : Download audio"
+    echo "  -ac, --audio-clip    : Download audio clip"
+    echo "  -vc, --video-clip    : Download video clip"
+    exit 1
+}
+# Check if exactly 2 arguments are provided
+if [ $# -ne 2 ]; then
+    echo "Error: Invalid number of arguments."
+    usage
+fi
 
+FLAG="$1"
+url="$2"
+
+case "$FLAG" in
+    -v|--video)
+        clear && echo "Selected option: Video"
+        choice="video"
+        ;;
+    -a|--audio)
+        clear && echo "Selected option: Audio"
+        choice="audio"
+        ;;
+    -ac|--audio-clip)
+        clear && echo "Selected option: Audio-clip"
+        choice="audio-clip"
+        ;;
+    -vc|--video-clip)
+        clear && echo "Selected option: Video-clip"
+        choice="video-clip"
+        ;;
+    *)
+        echo "Error: Invalid flag '$FLAG'"
+        usage
+        ;;
+esac
+
+# ===============================================================
 # Showing the Video information to the user to help them choose the format
-url="$1"
-clear
-echo "$(color yellow "fetching video information...")"
+echo "$(color yellow "fetching download information...")"
 yt-dlp -F "$url"
-
-# Prompt user for download option
+# If the above command fails, exit the script
+if [ $? -ne 0 ]; then
+    exit 1
+fi
 echo -e "\n$(color magenta Note:) Type 'exit' in any prompt to quit the script."
-echo "Choose The Download Option:"
-echo "1. Video"
-echo "2. Audio"
-echo "3. Video Clips"
-echo "4. Audio Clips"
-read -p "$(color magenta "Enter your choice (1-4):") " choice
-handle_exit "$choice"
-
 fileName_pattern="%(title)s_%(id)s_%(resolution)s"     # Pattern for naming of downloaded files
 
 # ===============================================================
-if [[ "$choice" == "1" ]]; then # Download Video
+if [[ "$choice" == "video" ]]; then
     read -p "$(color magenta "Enter the format code for Video (e.g. 18 or 137+140 or bv+ba):") " format_code
     handle_exit "$format_code"
     # The '\' is line continuation character in bash, allowing a command to span multiple lines for better readability.
@@ -101,7 +131,7 @@ if [[ "$choice" == "1" ]]; then # Download Video
     "$url"
 # ===============================================================
 
-elif [[ "$choice" == "2" ]]; then   # Download Audio
+elif [[ "$choice" == "audio" ]]; then
     read -p "$(color magenta "Enter the format code for Audio (e.g. 140 or ba):") " format_code
     handle_exit "$format_code"
     # yt-dlp command to download Audio
@@ -116,7 +146,7 @@ elif [[ "$choice" == "2" ]]; then   # Download Audio
     "$url"
 # ===============================================================
 
-elif [[ "$choice" == "3" ]]; then   # Download Video Clips
+elif [[ "$choice" == "video-clip" ]]; then
     read -p "$(color magenta "Enter the clip timing range (e.g., 00:01:30-00:02:45):") " time_range
     handle_exit "$time_range"
     read -p "$(color magenta "Enter the format code for Video (e.g. 18 or 137+140 or bv+ba):") " format_code
@@ -135,7 +165,7 @@ elif [[ "$choice" == "3" ]]; then   # Download Video Clips
     "$url"
 # ===============================================================
 
-elif [[ "$choice" == "4" ]]; then   # Download Audio Clips
+elif [[ "$choice" == "audio-clip" ]]; then
     read -p "$(color magenta "Enter the clip timing range (e.g., 00:01:30-00:02:45):") " time_range
     handle_exit "$time_range"
     read -p "$(color magenta "Enter the format code for Audio (e.g. 140 or ba):") " format_code
@@ -153,8 +183,4 @@ elif [[ "$choice" == "4" ]]; then   # Download Audio Clips
     --fragment-retries 10 \
     "$url"
 # ===============================================================
-    
-else
-    echo "❌ Invalid choice. Exiting."
-    exit 1
 fi
