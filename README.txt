@@ -1,12 +1,8 @@
-Personal Bash Commands Package (mycmd).
-Version: 1.0 (as on Sep 27, 2025)
-© Tirupati 2025
-
 ===============================
 1. About this package
 ===============================
 
-This package contains a collection of personal day-to-day bash commands designed to improve productivity,
+The 'mycmd' package contains a collection of personal day-to-day bash commands designed to improve productivity,
 and make commonly used operations more convenient.  
 It is lightweight, easy to set up, and fully customizable.
 Its only dependency is python3.
@@ -66,3 +62,5 @@ you don't need to manually re-run the setup each time.
 
 Note: This package contains its own 'bashrc' file named '.my_custom_bashrc'.
 You can modify it as per your needs. e.g., adding more aliases or functions, or customizing any variables (like PS1).
+
+© Tirupati 2025

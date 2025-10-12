@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# Smart line ending converter.
+# Detects CRLF or LF and prompts the user before converting.
+
+set -euo pipefail
+
+# Function to detect line endings
+detect_line_endings() {
+    local file="$1"
+    if grep -q $'\r' "$file"; then
+        echo "CRLF"
+    else
+        echo "LF"
+    fi
+}
+
+# Check input
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 <file-path>"
+    exit 1
+fi
+
+input_file="$1"
+
+# Verify file exists
+if [ ! -f "$input_file" ]; then
+    echo "Error: File '$input_file' not found!"
+    exit 1
+fi
+
+# Detect current line endings
+current_ending=$(detect_line_endings "$input_file")
+echo "Current line endings for the file '$input_file': $current_ending"
+
+# Prompt user for conversion
+if [ "$current_ending" == "CRLF" ]; then
+    read -rp "Convert CRLF → LF? [y/N]: " answer
+    if [[ "$answer" =~ ^[Yy]$ ]]; then
+        tmp_file=$(mktemp)
+        sed 's/\r$//' "$input_file" > "$tmp_file"
+        mv "$tmp_file" "$input_file"
+        echo "Converted '$input_file' to LF successfully!"
+    else
+        echo "Conversion skipped."
+    fi
+else
+    read -rp "Convert LF → CRLF? [y/N]: " answer
+    if [[ "$answer" =~ ^[Yy]$ ]]; then
+        tmp_file=$(mktemp)
+        sed 's/$/\r/' "$input_file" > "$tmp_file"
+        mv "$tmp_file" "$input_file"
+        echo "Converted '$input_file' to CRLF successfully!"
+    else
+        echo "Conversion skipped."
+    fi
+fi
