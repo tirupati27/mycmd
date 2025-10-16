@@ -11,16 +11,6 @@
 # ================================================================
 
 
-
-# Modify the below list to include directories where you want to save downloads
-# The script will use the first existing directory from this list
-dir_preference=(
-    "/storage/emulated/0"
-    "/mnt/c/Users/Tirupati Bala/Desktop"
-)
-
-
-
 # ===============================================================
 # 1. User-defined functions
 # ===============================================================
@@ -28,22 +18,59 @@ dir_preference=(
 
 # usage: choose_download_dir
 choose_download_dir() {
-    # don't make the below variable local, as it is used in main script
-    FIRST_EXISTING_DIR=""
-    for dir in "${dir_preference[@]}"; do
-        if [ -d "$dir" ]; then
-            FIRST_EXISTING_DIR="$dir"
-            break
-        fi
-    done
-    # Exit the script if no directory exists
-    if [ -z "$FIRST_EXISTING_DIR" ]; then
-        warning_and_exit \
-"None of the preferred directories exist to save downloads.
-Please modify the script $(text_attr yellow "$MYCMD/yt") to include an existing directory."
+    local file="$MYCMD/dirs.txt"
+    # Create dirs.txt if it doesn't exist
+    if [[ ! -f "$file" ]]; then
+        cat > "$file" <<dirEOF
+Note:
+# ---------------------------------------------
+# List your preferred directories to save downloads, one per line.
+# The first existing directory in the list will be used as the default.
+# Lines starting with '#' are comments and will be ignored.
+# Example directories:
+$HOME/david/Music
+/sdcard/Music/songs
+# ---------------------------------------------
+dirEOF
     fi
-    cd "$FIRST_EXISTING_DIR" || warning_and_exit \
-"Failed to change directory to $FIRST_EXISTING_DIR. Please check permissions."
+    # Save directories from dirs.txt into an array, ignoring comments and empty lines
+    local dirs=()
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        if [[ -d "$line" ]]; then
+            dirs+=("$line")
+        fi
+    done < "$file"
+    # check if dirs array is empty
+    if [[ ${#dirs[@]} -eq 0 ]]; then
+    warning_and_exit \
+"None of the preferred directories exist to save downloads.
+Please modify the file '$(text_attr yellow "$MYCMD/dirs.txt")' to include an existing directory."
+    fi
+    # Prompt user to choose default directory or select another
+    read -p "$(text_attr underline "Save your $ACTION to '${dirs[0]}'")? [y/n]: " response && handle_exit "$response"
+    if [[ "$response" =~ ^[Yy]$ ]]; then
+        local selected_dir="${dirs[0]}"
+    else
+        echo -e "\n$(text_attr magenta Note:) you can type 'exit' in any prompt to quit the program.\n"
+        local i=1
+        for dir in "${dirs[@]}"; do
+            echo "  $i. $dir"
+            ((i++))
+        done
+        while true; do
+            read -p "$(text_attr underline "Choose from above directories to save the $ACTION"): " response && handle_exit "$response"
+            [[ -n "$response" ]] && break || echo "$(text_attr red "Please choose a directory to save the $ACTION.")"
+        done
+        if [[ "$response" =~ ^[0-9]+$ ]] && (( response >= 1 && response <= ${#dirs[@]} )); then
+            local selected_dir="${dirs[$((response-1))]}"
+        else
+            warning_and_exit "Invalid choice '$response'. Please run the script again and choose a valid option."
+        fi
+    fi
+    # change directory to user's selected directory
+    cd "$selected_dir" || warning_and_exit \
+"Failed to change directory to $selected_dir. Please check permissions."
 }
 
 # usage: text_attr "attr1+attr2+..." "text-to-style"
@@ -117,37 +144,57 @@ text_attr() {
   echo -e "${final_code}${text}${reset}"
 }
 
-# usage: show_debug_info <color-of-border> <full-yt-dlp-command>
-show_debug_info() {
+# Usage: show_debugInfo_and_exit
+show_debugInfo_and_exit() {
     local colors=("red" "green" "blue" "yellow" "cyan")
     local color_name="${colors[RANDOM % ${#colors[@]}]}"
-    local attribute="$color_name+bold"
+    local attribute="${color_name}+bold"
     local H_line="___________________________________________________________"
     local V_line="|"
-    echo \
-"$(text_attr $attribute $H_line)
-Debug Info:
-$(text_attr $attribute $H_line)
-OS                   $(text_attr $attribute $V_line)  $(uname -a)
-yt-dlp version       $(text_attr $attribute $V_line)  $(command -v yt-dlp >/dev/null 2>&1 && yt-dlp --version || echo "yt-dlp not installed")
-User                 $(text_attr $attribute $V_line)  $USER
-PWD                  $(text_attr $attribute $V_line)  $(pwd)
-mycmd package dir.   $(text_attr $attribute $V_line)  $MYCMD
-$(text_attr $attribute $H_line)
-User command         $(text_attr $attribute $V_line)  yt $@
-Selected action      $(text_attr $attribute $V_line)  $ACTION
-Downloading from URL $(text_attr $attribute $V_line)  $URL
-Saving downloads to  $(text_attr $attribute $V_line)  $FIRST_EXISTING_DIR
-Using format code    $(text_attr $attribute $V_line)  $FORMAT_CODE
-File name pattern    $(text_attr $attribute $V_line)  $fileName_pattern
-$(text_attr $attribute $H_line)
-Full yt-dlp command  $(text_attr $attribute $V_line)  $1
-$(text_attr $attribute $H_line)"
+    # Define a helper i.e "print_row <key> <value>"
+    print_row() {
+        printf "%-${max_key_len}s %s %s\n" "$1" "$(text_attr "$attribute" "$V_line")" "$2"
+    }
+    # Collect all keys (for width calculation)
+    local keys=(
+        "OS" "yt-dlp version" "User" "PWD" "mycmd package dir."
+        "User command" "Selected action" "Downloading from URL"
+        "Saving downloads to" "Using format code"
+        "File name pattern" "Full yt-dlp command"
+    )
+    # Compute longest key for column width
+    local max_key_len=0
+    for k in "${keys[@]}"; do
+        (( ${#k} > max_key_len )) && max_key_len=${#k}
+    done
+    ((max_key_len+=1))
+    echo "$(text_attr "$attribute" "$H_line")"
+    echo "Debug Info.(Action='$ACTION'):"
+    echo "$(text_attr "$attribute" "$H_line")"
+    print_row "OS" "$(uname -a)"
+    print_row "yt-dlp version" "$(command -v yt-dlp >/dev/null 2>&1 && yt-dlp --version || echo 'yt-dlp not installed')"
+    print_row "User" "$USER"
+    print_row "PWD" "$(echo $OLDPWD)"
+    print_row "mycmd package dir." "$MYCMD"
+    echo "$(text_attr "$attribute" "$H_line")"
+    print_row "User command" "$user_command"
+    print_row "Selected action" "$ACTION"
+    print_row "Downloading from URL" "$URL"
+    print_row "Saving downloads to" "$(pwd)"
+    print_row "Using format code" "$FORMAT_CODE"
+    print_row "File name pattern" "$fileName_pattern"
+    # Printing full yt-dlp command
+    local temp_arr=($ytdlp_command)
+    printf "%-${max_key_len}s" "Full yt-dlp Command"
+    echo " $(text_attr "$attribute" "$V_line") ${temp_arr[@]}"
+    echo "$(text_attr "$attribute" "$H_line")"
+    exit 0
 }
 
 # function to handle exit when user types 'exit' in any prompt
 handle_exit() {
     if [[ "$1" == "exit" ]]; then
+        echo "You cancelled the $ACTION download process."
         echo "$(text_attr cyan "Exiting the script.")"
         exit 0
     fi
@@ -156,15 +203,66 @@ handle_exit() {
 warning_and_exit() {
     echo "$(text_attr red "Error:") $1"
     echo -e "\n$(text_attr green "Usage:") yt <action> [url] [--best] [--debug]"
-    echo "$(text_attr rand_color "Try 'yt --help' for more information.")"
+    echo "Try '$(text_attr rand_color "yt --help")' for more information."
     exit 1
+}
+
+# usage: prompt_for_url
+prompt_for_url() {
+    if [[ "$URL" == "NA" ]]; then
+        echo -e "\n$(text_attr magenta Note:) you can type 'exit' in any prompt to quit the program.\n"
+        echo "URL not provided as argument to download the $ACTION."
+        while true; do
+            read -p "$(text_attr underline "Enter URL to download the $ACTION"): " URL && handle_exit "$URL"
+            [[ -n "$URL" ]] && break || echo "$(text_attr red "Please enter URL for the $ACTION.")"
+        done
+    fi
+}
+
+# Usage: prompt_for_format_code "bv+ba" "[e.g. 18 or 137+140 or bv+ba]"
+prompt_for_format_code() {
+    if [[ "$FORMAT_CODE" == "--best" ]]; then
+        FORMAT_CODE=$1
+    else
+        if command -v yt-dlp >/dev/null 2>&1; then
+            clear
+            echo "$(text_attr yellow "fetching available formats...to choose for the $ACTION")"
+            yt-dlp -F "$URL" || echo "$(text_attr red "Failed to fetch formats from the provided URL.")" && exit 1
+            echo -e "\n$(text_attr magenta Note:) you can type 'exit' in any prompt to quit the program.\n"
+            while true; do
+                read -p "$(text_attr magenta "Enter format code for $ACTION") $2: " FORMAT_CODE && handle_exit "$FORMAT_CODE"
+                [[ -n "$FORMAT_CODE" ]] && break || echo "$(text_attr red "Please enter format code to download the $ACTION.")"
+            done
+        else
+            # This block is executed in debug mode
+            FORMAT_CODE="neither_'--best'_used_nor_yt-dlp_installed"
+        fi
+    fi
+}
+
+# usage: prompt_for_time_range
+prompt_for_time_range() {
+    #if [[ "$TIME_RANGE" == "NA" ]]; then
+        echo -e "\n$(text_attr magenta Note:) you can type 'exit' in any prompt to quit the program.\n"
+        #echo "Time range for $ACTION not provided as argument."
+        while true; do
+            read -p "$(text_attr underline "Enter time range for $ACTION") [e.g. 00:01:30-00:02:45]: " TIME_RANGE && handle_exit "$TIME_RANGE"
+            [[ -n "$TIME_RANGE" ]] && break || echo "$(text_attr red "Please enter time range for the $ACTION.")"
+        done
+    #fi
+}
+
+# usage: final_execution
+final_execution() {
+$DEBUG_MODE && show_debugInfo_and_exit || \
+$ytdlp_command && echo -e "\n$(text_attr green+bold+underline "Downloaded"): File saved as $(pwd)/$fileName_pattern.mp4" || \
+echo -e "\n$(text_attr red+bold+underline "Download failed.")" 
 }
 
 
 # ===============================================================
 # 2. Parsing the CLI arguments
 # ===============================================================
-
 
 # Default values
 ACTION="NA"             # -v, -a, -vc, -ac, --help
@@ -198,13 +296,13 @@ for arg in "$@"; do     # Iterating over all CLI arguments
             DEBUG_MODE=true
             ;;
         *)
-            warning_and_exit "Unknown option $(text_attr cyan "$arg")"
+            warning_and_exit "Unknown option '$(text_attr cyan "$arg")'"
             ;;
     esac
 done
 # if required argument i.e. ACTION is not provided, exit the script
 if [[ "$ACTION" == "NA" ]]; then
-    warning_and_exit "Argument $(text_attr rand_color "<action>") is required."
+    warning_and_exit "Argument $(text_attr underline "<action>") is required."
 fi
 
 
@@ -212,18 +310,106 @@ fi
 # 3. Main script logic
 # ===============================================================
 
+
+user_command="yt $@"
 # check if yt-dlp is installed and script is not in debug mode
 if ! command -v yt-dlp >/dev/null 2>&1 && ! $DEBUG_MODE; then
     warning_and_exit "yt-dlp is not installed, please install it first."
 fi
 
-# -------------------- ACTION=="show_help" -------------------------
+# -------------------- 1. ACTION=="video" ------------------------------
+
+if [[ "$ACTION" == "video" ]]; then
+    prompt_for_url
+    prompt_for_format_code "bv+ba" "[e.g. 18 or 137+140 or bv+ba]"
+    choose_download_dir
+    fileName_pattern="%(title)s_%(id)s_%(resolution)s"
+    # Set full yt-dlp command
+    ytdlp_command="yt-dlp \
+                   -f $FORMAT_CODE \
+                   -o $fileName_pattern \
+                   --merge-output-format mp4 \
+                   --embed-thumbnail \
+                   --no-playlist \
+                   --retries infinite \
+                   --fragment-retries 10 \
+                   $URL"
+    final_execution
+fi
+
+# -------------------- 2. ACTION=="audio" ------------------------------
+
+if [[ "$ACTION" == "audio" ]]; then
+    prompt_for_url
+    prompt_for_format_code "ba" "[e.g. 140 or ba]"
+    choose_download_dir
+    fileName_pattern="%(title)s_%(id)s_%(resolution)s.mp3"
+    # Set full yt-dlp command
+    ytdlp_command="yt-dlp \
+                   -f $FORMAT_CODE \
+                   -o $fileName_pattern \
+                   --extract-audio \
+                   --embed-thumbnail \
+                   --no-playlist \
+                   --retries infinite \
+                   --fragment-retries 10 \
+                   $URL"
+    final_execution
+fi
+
+# -------------------- 3. ACTION=="video-clip" -------------------------
+
+if [[ "$ACTION" == "video-clip" ]]; then
+    prompt_for_url
+    prompt_for_format_code "bv" "[e.g. 18 or 137+140 or bv+ba]"
+    prompt_for_time_range
+    choose_download_dir
+    fileName_pattern="%(title)s_%(id)s_%(resolution)s"
+    # Set full yt-dlp command
+    ytdlp_command="yt-dlp \
+                   -f $FORMAT_CODE \
+                   -o $fileName_pattern \
+                   --merge-output-format mp4 \
+                   --download-sections *$time_range \
+                   --force-keyframes-at-cuts \
+                   --embed-thumbnail \
+                   --no-playlist \
+                   --retries infinite \
+                   --fragment-retries 10 \
+                   $URL"
+    final_execution
+fi
+
+# -------------------- 4. ACTION=="audio-clip" -------------------------
+
+if [[ "$ACTION" == "audio-clip" ]]; then
+    prompt_for_url
+    prompt_for_format_code "ba" "[e.g. 140 or ba]"
+    prompt_for_time_range
+    choose_download_dir
+    fileName_pattern="%(title)s_%(id)s_%(resolution)s.mp3"
+    # Set full yt-dlp command
+    ytdlp_command="yt-dlp \
+                   -f $FORMAT_CODE \
+                   -o $fileName_pattern \
+                   --extract-audio \
+                   --download-sections *$time_range \
+                   --force-keyframes-at-cuts \
+                   --embed-thumbnail \
+                   --no-playlist \
+                   --retries infinite \
+                   --fragment-retries 10 \
+                   $URL"
+    final_execution
+fi
+
+# -------------------- 5. ACTION=="show_help" -------------------------
 
 if [[ "$ACTION" == "show_help" ]]; then
     echo \
 "It is a simple script to download Videos or Audio from YouTube using yt-dlp.
 The script provides options to download video, audio, video clip or audio clip
-The $(text_attr green "download directory can be customized") by modifying the script
+The $(text_attr underline "download directory can be customized") by modifying the script
 It also allows users to choose the quality of download by specifying format codes
 The script is designed to be user-friendly and works in Termux on Android as well as in Linux environments.
 
@@ -246,148 +432,3 @@ $(text_attr green "Examples:")
   'yt --help'"
     exit 0
 fi
-
-# -------------------- ACTION=="video" ------------------------------
-
-if [[ "$ACTION" == "video" ]]; then
-    # prompt for URL if not provided as argument
-    if [[ "$URL" == "NA" ]]; then
-        echo -e "\n$(text_attr magenta Note:) you can type 'exit' in any prompt to quit the program.\n"
-        echo "URL not provided as argument."
-        while true; do
-            read -p "$(text_attr underline "Enter URL to download the $ACTION"): " URL && handle_exit "$URL"
-            [[ -n "$URL" ]] && break || echo "$(text_attr red "URL can't be empty")"
-        done
-    fi
-    # Prompt for FORMAT_CODE if not provided as argument
-    if [[ "$FORMAT_CODE" == "NA" ]]; then
-        clear
-        echo "$(text_attr yellow "fetching download information...")"
-        exit
-    fi
-
-    fileName_pattern="%(title)s_%(id)s_%(resolution)s"
-    download_choice "$(text_attr green "[e.g. 18 or 137+140 or bv+ba]")" "bv+ba"
-    echo "helo"
-    show_debugInfo_and_exit
-
-    # yt-dlp command to download Video
-    yt-dlp \
-    -f "$FORMAT_CODE" \
-    -o "$fileName_pattern" \
-    --merge-output-format mp4 \
-    --embed-thumbnail \
-    --no-playlist \
-    --retries infinite \
-    --fragment-retries 10 \
-    "$URL"
-fi
-# -------------------- ACTION=="audio" ------------------------------
-
-if [[ "$ACTION" == "audio" ]]; then
-    download_choice "[e.g. 140 or ba]" "ba"
-    show_debugInfo_and_exit
-
-    # yt-dlp command to download Audio
-    yt-dlp \
-    -f "$FORMAT_CODE" \
-    -o "$fileName_pattern" \
-    --extract-audio \
-    --embed-thumbnail \
-    --no-playlist \
-    --retries infinite \
-    --fragment-retries 10 \
-    "$URL"
-fi
-# -------------------- ACTION=="video-clip" -------------------------
-
-if [[ "$ACTION" == "video-clip" ]]; then
-    echo -e "\n$(text_attr magenta Note:) Type 'exit' in any prompt to quit the script."
-    read -p "$(text_attr magenta "Enter the $ACTION timing range [e.g. 00:01:30-00:02:45]: ")" time_range
-    handle_exit "$time_range"
-    download_choice "[e.g. 18 or 137+140 or bv+ba]" "bv+ba"
-    show_debugInfo_and_exit
-
-    # yt-dlp command to download Video clips
-    yt-dlp \
-    -f "$FORMAT_CODE" \
-    -o "$fileName_pattern" \
-    --merge-output-format mp4 \
-    --download-sections "*$time_range" \
-    --force-keyframes-at-cuts \
-    --embed-thumbnail \
-    --no-playlist \
-    --retries infinite \
-    --fragment-retries 10 \
-    "$URL"
-fi
-# -------------------- ACTION=="audio-clip" -------------------------
-
-if [[ "$ACTION" == "audio-clip" ]]; then
-    echo -e "\n$(text_attr magenta Note:) Type 'exit' in any prompt to quit the script."
-    read -p "$(text_attr magenta "Enter the $ACTION timing range [e.g. 00:01:30-00:02:45]: ")" time_range
-    handle_exit "$time_range"
-    download_choice "[e.g. 140 or ba]" "ba"
-    show_debugInfo_and_exit
-
-    # yt-dlp command to download Audio clips
-    yt-dlp \
-    -f "$FORMAT_CODE" \
-    -o "$fileName_pattern.mp3" \
-    --extract-audio \
-    --download-sections "*$time_range" \
-    --force-keyframes-at-cuts \
-    --embed-thumbnail \
-    --no-playlist \
-    --retries infinite \
-    --fragment-retries 10 \
-    "$URL"
-fi
-
-: << "commented_out"
-# function to prompt user for format code based on choice
-# download_choice <prompt_help_text> <FORMAT_CODE>
-# e.g. download_choice "[e.g. 18 or 137+140 or bv+ba]" "bv+ba"
-download_choice() {
-    clear
-    echo "$(text_attr green "Your download choice") :  $ACTION"
-    echo "$(text_attr green "Download Save to")   :  $FIRST_EXISTING_DIR"
-    if [[ "$SHOW_FORMATS" == true ]]; then
-        echo "$(text_attr yellow "fetching download information...")"
-        yt-dlp -F "$URL"
-        [ $? -ne 0 ] && exit 1  # If the above command fails, exit the script
-        echo -e "\n$(text_attr magenta Note:) Type 'exit' in any prompt to quit the script."
-        read -p "$(text_attr magenta "Enter the format code for $ACTION") $1: " FORMAT_CODE
-        handle_exit "$FORMAT_CODE"
-        # for empty input, set FORMAT_CODE to best available format
-        if [[ -z "$FORMAT_CODE" ]]; then
-            FORMAT_CODE="$2"
-            echo "$(text_attr yellow "No format code entered. Downloading best available quality [format code: $FORMAT_CODE].")"
-        fi
-    else
-        FORMAT_CODE="$2"
-        echo "$(text_attr green "Choosen quality") :  best available quality [format code: $FORMAT_CODE]"
-    fi
-}
-commented_out
-
-
-
-
-: << "commented_out"
-if [[ "$SHOW_HELP" == true ]]; then
-    # Ensure --help is only used alone e.g. "yt --help"
-    if [[ $# -eq 1 && "$1" == "--help" ]]; then
-        printUsage_and_exit 0
-    else
-        printUsage_and_exit 1 "$(text_attr red "--help") cannot be combined with other arguments."
-    fi
-# CHOICE and URL are required arguments
-elif [[ "$ACTION" == "NA" || "$URL" == "NA" ]]; then
-    printUsage_and_exit 1 "Both $(text_attr red "<flag>") and $(text_attr red "<url>") are required arguments."
-fi
-commented_out
-
-: << "commented_out"
-# step 1: Exit the script if yt-dlp is not installed
-commented_out

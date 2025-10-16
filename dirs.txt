@@ -1,0 +1,10 @@
+Note:
+# ---------------------------------------------
+# List your preferred directories to save downloads, one per line.
+# The first existing directory in the list will be used as the default.
+# Lines starting with '#' are comments and will be ignored.
+# Example directories:
+/home/tirupati/david/Music
+/sdcard/Music/songs
+/home
+# ---------------------------------------------

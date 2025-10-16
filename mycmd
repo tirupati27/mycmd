@@ -9,9 +9,11 @@
 # If "--version" argument is passed
 if [[ "$1" == "--version" ]]; then
     # Using git to get the last commit date as version info
-    echo "Personal Bash Commands Package (mycmd)"
+    echo -e "\033[4mPersonal Bash Commands Package (mycmd)\033[0m"
+    echo "Author: Tirupati_Bala_Maddheshiya"
     cd "$MYCMD"  # Change to the package directory for git command to work
     echo "Version: $(git log -1 --date=format-local:"%b %d, %Y" --format="%cd")"
+    echo "© $(git log -1 --date=format-local:"%Y" --format="%cd") Tirupati"
     echo -e "\033[32mTry 'mycmd --help' for more information.\033[0m"
 elif [[ "$1" == "--help" ]]; then
     # Print the entire README.txt file
