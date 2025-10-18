@@ -6,20 +6,89 @@
 #       - If run without arguments, it prints the whole file.
 # ================================================================
 
+# Change to the package directory for git command to work
+[[ -z "$MYCMD" ]] && echo "Failed to change directory to mycmd package" && exit 1
+cd "$MYCMD"
+
+update_mycmd() {
+    echo "🔍 Checking for updates..."
+    # Ensure we're inside a Git repo
+    if ! git -C "$MYCMD" rev-parse --is-inside-work-tree &>/dev/null; then
+    echo "❌ Error: '$MYCMD' is not a git repository."
+    echo "Please ensure that the 'mycmd' package is cloned using git."
+    echo "'git clone https://github.com/tirupati27/mycmd.git'"
+    fi
+    # Ensure 'origin' remote exists
+    if ! git remote | grep -q '^origin$'; then
+        echo "⚙️ Adding 'origin' remote..."
+        git remote add origin https://github.com/tirupati27/mycmd.git || {
+            echo "❌ Failed to add origin remote."
+            return 3
+        }
+    else
+        echo "🔧 Setting origin URL to HTTPS..."
+        git remote set-url origin https://github.com/tirupati27/mycmd.git
+    fi
+    # fetch latest upstream
+    echo "🌐 Fetching latest updates from GitHub..."
+    if ! git fetch origin; then
+        echo "❌ Failed to connect to GitHub repository."
+        echo "🔌 Please check your internet connection."
+        return 1
+    fi
+    # Switch to main branch safely
+    echo "📂 Switching to 'main' branch..."
+    if ! git checkout main &>/dev/null; then
+        echo "❌ Failed to switch to 'main' branch."
+        #echo "💡 Try: git checkout -b main origin/main"
+        return 4
+    fi
+    # Compare local vs upstream commits
+    local LOCAL UPSTREAM
+    LOCAL=$(git rev-parse @)
+    # Redirect errors to /dev/null and use '|| true' to avoid breaking the script if no upstream exists.
+    UPSTREAM=$(git rev-parse @{u} 2>/dev/null || true)
+
+    echo "🔎 Comparing local and remote branches..."
+    if [[ -z "$UPSTREAM" ]]; then
+        echo "⚠️ No upstream branch found. Setting upstream to origin/main..."
+        git branch --set-upstream-to=origin/main main || return 5
+        UPSTREAM=$(git rev-parse @{u})
+    fi
+
+    if [[ "$LOCAL" == "$UPSTREAM" ]]; then
+        echo -e "\n✅ Status: \033[1;32mAlready up to date.\033[0m"
+    else
+        echo -e "\n⬆️ Status: \033[1;31mNewer version available.\033[0m"
+        echo "🚀 Updating local repository..."
+        git reset --hard "$UPSTREAM" && echo -e "\n✅ \033[1;32mUpdate successful!\033[0m"
+    fi
+}
+
+
+
 # If "--version" argument is passed
-if [[ "$1" == "--version" ]]; then
+if [[ "$1" == --ver* ]]; then
     # Using git to get the last commit date as version info
     echo -e "\033[4mPersonal Bash Commands Package (mycmd)\033[0m"
     echo "Author: Tirupati_Bala_Maddheshiya"
-    cd "$MYCMD"  # Change to the package directory for git command to work
     echo "Version: $(git log -1 --date=format-local:"%b %d, %Y" --format="%cd")"
-    echo "© $(git log -1 --date=format-local:"%Y" --format="%cd") Tirupati"
+    echo "© 2025 Tirupati"
     echo -e "\033[32mTry 'mycmd --help' for more information.\033[0m"
 elif [[ "$1" == "--help" ]]; then
     # Print the entire README.txt file
-    cat "$MYCMD/README.txt"
-else
+    cat "$MYCMD/README.md"
+elif [[ "$1" == "--update" ]]; then
+    update_mycmd
+elif [[ "$1" == "--cmd" ]]; then
     echo -e "\033[1;35mAvailable Commands in this package are:\033[0m"
     find "$MYCMD" -maxdepth 1 -type f ! -name "*.*" -printf "    > %f\n"
-    echo -e "\033[32mTry 'mycmd --help' for more information.\033[0m"
+    echo -e "\033[32mTry '<command> --help' for more information about that command.\033[0m"
+else
+    echo "Unknown Option: $1"
+    echo "Usage:"
+    echo "  mycmd --version  : To verify setup/check current version."
+    echo "  mycmd --help     : To show help for this package."
+    echo "  mycmd --update   : To install latest updates of this package."
+    echo "  mycmd --cmd      : To show available Commands in this package."
 fi

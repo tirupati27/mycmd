@@ -18,59 +18,75 @@
 
 # usage: choose_download_dir
 choose_download_dir() {
-    local file="$MYCMD/dirs.txt"
-    # Create dirs.txt if it doesn't exist
+    local file="$MYCMD/yt-dirs.txt"
+    # ---------------------------------------------------------
+    # Create yt-dirs.txt if it doesn't exist, with sample entries
+    # ---------------------------------------------------------
     if [[ ! -f "$file" ]]; then
-        cat > "$file" <<dirEOF
+        cat > "$file" <<'dirEOF'
 Note:
 # ---------------------------------------------
 # List your preferred directories to save downloads, one per line.
 # The first existing directory in the list will be used as the default.
 # Lines starting with '#' are comments and will be ignored.
 # Example directories:
-$HOME/david/Music
+$HOME/Music
 /sdcard/Music/songs
 # ---------------------------------------------
 dirEOF
     fi
-    # Save directories from dirs.txt into an array, ignoring comments and empty lines
+    # ---------------------------------------------------------
+    # Collect valid directories from the file (ignore comments) into an array
+    # ---------------------------------------------------------
     local dirs=()
     while IFS= read -r line; do
-        [[ -z "$line" ]] && continue
-        if [[ -d "$line" ]]; then
-            dirs+=("$line")
-        fi
+        # Skip comments, empty lines, and non-existent directories
+        [[ -z "$line" || "$line" =~ ^# ]] && continue
+        [[ -d "$line" ]] || continue
+        dirs+=("$line")
     done < "$file"
-    # check if dirs array is empty
-    if [[ ${#dirs[@]} -eq 0 ]]; then
-    warning_and_exit \
-"None of the preferred directories exist to save downloads.
-Please modify the file '$(text_attr yellow "$MYCMD/dirs.txt")' to include an existing directory."
-    fi
-    # Prompt user to choose default directory or select another
-    read -p "$(text_attr underline "Save your $ACTION to '${dirs[0]}'")? [y/n]: " response && handle_exit "$response"
-    if [[ "$response" =~ ^[Yy]$ ]]; then
-        local selected_dir="${dirs[0]}"
-    else
-        echo -e "\n$(text_attr magenta Note:) you can type 'exit' in any prompt to quit the program.\n"
-        local i=1
-        for dir in "${dirs[@]}"; do
-            echo "  $i. $dir"
-            ((i++))
-        done
-        while true; do
-            read -p "$(text_attr underline "Choose from above directories to save the $ACTION"): " response && handle_exit "$response"
-            [[ -n "$response" ]] && break || echo "$(text_attr red "Please choose a directory to save the $ACTION.")"
-        done
-        if [[ "$response" =~ ^[0-9]+$ ]] && (( response >= 1 && response <= ${#dirs[@]} )); then
-            local selected_dir="${dirs[$((response-1))]}"
+
+    # if the array is empty exit the script
+    [[ ${#dirs[@]} -eq 0 ]] && warning_and_exit \
+"❌ None of the preferred directories exist to save downloads.
+Please edit '$(text_attr yellow "$file")' to include valid directories."
+
+    # ---------------------------------------------------------
+    # Print all available dirs where the first directory is default
+    # ---------------------------------------------------------
+    local default_dir="${dirs[0]}"
+    echo "📁 Available directories to save downloads:"
+    local count=1
+    for dir in "${dirs[@]}"; do
+        if [[ "$dir" == "$default_dir" ]]; then
+            echo "  $count. $dir  (default ✅)"
         else
-            warning_and_exit "Invalid choice '$response'. Please run the script again and choose a valid option."
+            echo "  $count. $dir"
         fi
-    fi
-    # change directory to user's selected directory
+        ((count++))
+    done
+    # ---------------------------------------------------------
+    # Ask the user if they want to use the default directory
+    # ---------------------------------------------------------
+    while true; do
+        read -p "$(text_attr underline "Choose a directory to save $ACTION [press enter for default]"): " response
+        handle_exit "$response"
+        local selected_dir
+        if [[ -z "$response" ]]; then
+            selected_dir="$default_dir" && break
+        # Ensure numeric and in range
+        elif [[ "$response" =~ ^[0-9]+$ ]] && (( response >= 1 && response <= ${#dirs[@]} )); then
+            selected_dir="${dirs[$((response-1))]}" && break
+        else
+            echo "$(text_attr red "Invalid choice. Please select a number between 1 and ${#dirs[@]}.")"
+        fi
+    done
+    # ---------------------------------------------------------
+    # Change to the selected directory
+    # ---------------------------------------------------------
     cd "$selected_dir" || warning_and_exit \
-"Failed to change directory to $selected_dir. Please check permissions."
+"❌ Failed to change directory to $selected_dir. Please check permissions."
+    echo "✅ Download directory set to: $(pwd)"
 }
 
 # usage: text_attr "attr1+attr2+..." "text-to-style"
@@ -221,7 +237,7 @@ prompt_for_url() {
 
 # Usage: prompt_for_format_code "bv+ba" "[e.g. 18 or 137+140 or bv+ba]"
 prompt_for_format_code() {
-    if [[ "$FORMAT_CODE" == "--best" ]]; then
+    if [[ "$FORMAT_CODE" == "best" ]]; then
         FORMAT_CODE=$1
     else
         if command -v yt-dlp >/dev/null 2>&1; then
