@@ -108,10 +108,10 @@ while True:
 # ----------------------------
 if os.geteuid() == 0:
     # Root user
-    ps1 = f"export PS1='\\[\\033[{username_color}m\\]{user_name}:\\[\\033[0m\\] \\[\\033[1;34m\\]\\w\\[\\033[0m\\] \\[\\033[1;32m\\]#\\[\\033[0m\\] '"
+    ps1 = f"export PS1='\\[\\033[{username_color}m\\]{user_name}:\\[\\033[0m\\] \\[\\033[1;34m\\]\\w\\[\\033[0m\\] \\[\\033[{username_color}m\\]#\\[\\033[0m\\] '"
 else:
     # Non-root user
-    ps1 = f"export PS1='\\[\\033[{username_color}m\\]{user_name}:\\[\\033[0m\\] \\[\\033[38;2;220;100;100m\\]\\w\\[\\033[0m\\] \\[\\033[1;93m\\]\\$\\[\\033[0m\\] '"
+    ps1 = f"export PS1='\\[\\033[{username_color}m\\]{user_name}:\\[\\033[0m\\] \\[\\033[38;2;220;100;100m\\]\\w\\[\\033[0m\\] \\[\\033[{username_color}m\\]\\$\\[\\033[0m\\] '"
 
 # ----------------------------
 # 4. Lines to add to ~/.bashrc
@@ -119,7 +119,7 @@ else:
 bashrc_lines_to_add = [
     f"\n# Added by mycmd's setup.py on ({timestamp}) © 2025 Tirupati",
     f'declare -xr MYCMD="{package_dir}"',
-    'source "$MYCMD/.my_custom_bashrc"',
+    'source "$MYCMD/my_bashrc.sh"',
     ps1
 ]
 
@@ -139,7 +139,7 @@ for line in existing_lines:
         skip = True
         continue
     if skip:
-        if line.strip() == "" or line.startswith("declare -xr MYCMD") or line.startswith('source "$MYCMD/') or line.startswith("export PS1="):
+        if line.strip() == "" or line.startswith("declare -xr MYCMD=") or line.startswith('source "$MYCMD/') or line.startswith("export PS1='"):
             continue
         else:
             skip = False

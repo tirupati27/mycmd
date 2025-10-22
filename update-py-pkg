@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# Get a list of all installed packages as an array
+packages=($(pip freeze | cut -d '=' -f 1))
+length=${#packages[@]}
+
+echo -e "\033[1;35mTotal $length packages found.\033[0m"
+
+# List all packages
+count=1
+for pkg in "${packages[@]}"; do
+    echo " $count. $pkg"
+    ((count++))
+done
+
+# Prompt user for confirmation
+read -p $'\n\033[1;33mDo you want to upgrade all these packages of current python env? (y/n): \033[0m' confirm
+if [[ "$confirm" != [yY] ]]; then
+    echo -e "\033[1;31mUpgrade cancelled by user.\033[0m"
+    exit 0
+fi
+
+# Loop through each package and upgrade it
+count=1
+for package in "${packages[@]}"
+do
+    echo -e "\n\033[1;32m$count/$length Upgrading '$package' ...\033[0m\n"
+    pip install --upgrade "$package"
+    ((count++))
+done
+echo -e "\n\033[1;35mAll packages upgraded!\033[0m\n"
